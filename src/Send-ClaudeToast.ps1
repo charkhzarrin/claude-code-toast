@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Main dispatcher for Claude Code toast notifications.
 .DESCRIPTION
@@ -46,51 +46,42 @@ try {
     # Check if this notification type is enabled
     if ($notifConfig.ContainsKey("enabled") -and -not $notifConfig.enabled) { exit 0 }
 
-    # --- Rate Limiting ---
-    $historyPath = Join-Path $env:LOCALAPPDATA "ClaudeCodeToast\history.json"
+    # --- Rate Limiting (file-timestamp based, avoids JSON parse overhead) ---
+    $historyPath = Join-Path $env:LOCALAPPDATA "ClaudeCodeToast\last_notify"
     $now = [DateTime]::UtcNow
-    $timestamps = @()
 
-    if (Test-Path $historyPath) {
-        try {
-            $history = Get-Content $historyPath -Raw | ConvertFrom-Json
-            if ($history.timestamps) {
-                $timestamps = @($history.timestamps | ForEach-Object {
-                    [DateTime]::Parse($_)
-                } | Where-Object {
-                    ($now - $_).TotalMinutes -le 60
-                })
-            }
-        } catch {
-            $timestamps = @()
-        }
-    }
-
-    # Check max per hour
-    $maxPerHour = if ($config.rateLimit -and $config.rateLimit.maxPerHour) { $config.rateLimit.maxPerHour } else { 10 }
-    if ($timestamps.Count -ge $maxPerHour) { exit 0 }
-
-    # Check cooldown
+    # Fast cooldown check using file last-write time (no JSON parsing)
     $cooldownSeconds = if ($config.rateLimit -and $config.rateLimit.cooldownSeconds) { $config.rateLimit.cooldownSeconds } else { 5 }
-    if ($timestamps.Count -gt 0) {
-        $lastTimestamp = $timestamps | Sort-Object | Select-Object -Last 1
-        if (($now - $lastTimestamp).TotalSeconds -lt $cooldownSeconds) { exit 0 }
-    }
+    if (Test-Path $historyPath) {
+        $lastWrite = (Get-Item $historyPath).LastWriteTimeUtc
+        if (($now - $lastWrite).TotalSeconds -lt $cooldownSeconds) { exit 0 }
 
-    # Record this notification
-    $timestamps += $now
-    $historyDir = Split-Path $historyPath -Parent
-    if (-not (Test-Path $historyDir)) {
-        New-Item -ItemType Directory -Path $historyDir -Force | Out-Null
+        # Hourly rate limit: count lines (each line = one timestamp)
+        $maxPerHour = if ($config.rateLimit -and $config.rateLimit.maxPerHour) { $config.rateLimit.maxPerHour } else { 10 }
+        $lines = @(Get-Content $historyPath -ErrorAction SilentlyContinue)
+        # Prune entries older than 1 hour
+        $cutoff = $now.AddHours(-1).ToString("o")
+        $recent = @($lines | Where-Object { $_ -gt $cutoff })
+        if ($recent.Count -ge $maxPerHour) { exit 0 }
+        # Append current timestamp and write back pruned list
+        $recent += $now.ToString("o")
+        $recent | Set-Content $historyPath -Force
+    } else {
+        # First notification — create file
+        $historyDir = Split-Path $historyPath -Parent
+        if (-not (Test-Path $historyDir)) {
+            New-Item -ItemType Directory -Path $historyDir -Force | Out-Null
+        }
+        $now.ToString("o") | Set-Content $historyPath -Force
     }
-    $historyData = @{ timestamps = @($timestamps | ForEach-Object { $_.ToString("o") }) }
-    $historyData | ConvertTo-Json -Depth 5 | Set-Content $historyPath -Force
 
     # --- Ensure BurntToast is available ---
-    if (-not (Get-Module -ListAvailable -Name BurntToast)) {
+    # Import directly instead of scanning all module paths with Get-Module -ListAvailable (slow)
+    try {
+        Import-Module BurntToast -ErrorAction Stop
+    } catch {
         exit 0
     }
-    Import-Module BurntToast -ErrorAction SilentlyContinue
 
     # --- Route to notification builder ---
     $notificationsDir = Join-Path $scriptDir "notifications"

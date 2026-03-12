@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     One-command installer for Claude Code Toast notifications.
 .DESCRIPTION
@@ -102,7 +102,7 @@ $hookEntry = @{
     hooks = @(
         @{
             type    = "command"
-            command = "powershell.exe -ExecutionPolicy Bypass -NoProfile -File `"$sendToastScript`""
+            command = "powershell.exe -ExecutionPolicy Bypass -NoProfile -NoLogo -NonInteractive -File `"$sendToastScript`""
             timeout = 10
         }
     )
