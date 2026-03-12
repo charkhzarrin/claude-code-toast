@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds and displays a silent toast notification for successful authentication.
 .DESCRIPTION
@@ -24,7 +24,7 @@ $toastParams = @{
 if ($NotifConfig.silent) {
     $toastParams["Silent"] = $true
 } elseif ($NotifConfig.sound) {
-    $toastParams["Sound"] = New-BTAudio -Source $NotifConfig.sound
+    $toastParams["Sound"] = $NotifConfig.sound
 }
 
 # Short expiration

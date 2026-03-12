@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds and displays a Reminder toast notification when Claude needs user input.
 .DESCRIPTION
@@ -38,7 +38,7 @@ if ($NotifConfig.showButton) {
 
 # Sound
 if (-not $NotifConfig.silent -and $NotifConfig.sound) {
-    $toastParams["Sound"] = New-BTAudio -Source $NotifConfig.sound
+    $toastParams["Sound"] = $NotifConfig.sound
 } elseif ($NotifConfig.silent) {
     $toastParams["Silent"] = $true
 }

@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "alwaysNotify": false,
   "aumid": "ClaudeCode.Toast",
   "deepLink": {
     "mode": "vscode",
@@ -13,7 +14,7 @@
     "permission_prompt": {
       "enabled": true,
       "scenario": "Urgent",
-      "sound": "ms-winsoundevent:Notification.Looping.Call2",
+      "sound": "Call2",
       "silent": false,
       "expirationMinutes": 5,
       "showButton": true,
@@ -22,7 +23,7 @@
     "idle_prompt": {
       "enabled": true,
       "scenario": "Default",
-      "sound": "ms-winsoundevent:Notification.Default",
+      "sound": "Default",
       "silent": false,
       "expirationMinutes": 30,
       "showButton": true,
@@ -40,7 +41,7 @@
     "elicitation_dialog": {
       "enabled": true,
       "scenario": "Reminder",
-      "sound": "ms-winsoundevent:Notification.Reminder",
+      "sound": "Reminder",
       "silent": false,
       "expirationMinutes": 60,
       "showButton": true,

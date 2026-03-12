@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Main dispatcher for Claude Code toast notifications.
 .DESCRIPTION
@@ -8,15 +8,43 @@
 
     IMPORTANT: This script must NEVER throw an error or return a non-zero exit code.
     A broken notification must never block Claude Code.
+
+    ASYNC DESIGN: When called by the hook (no -PayloadFile), it reads stdin,
+    writes to a temp file, spawns itself in the background, and exits immediately.
+    This ensures the hook returns in ~50ms and never blocks Claude Code's UI.
 #>
+param(
+    [string]$PayloadFile
+)
 
-try {
-    # Read JSON payload from stdin
-    $jsonInput = $input | Out-String
+# --- Hook mode: read stdin, fire async, exit fast ---
+if (-not $PayloadFile) {
+    try {
+        $jsonInput = $input | Out-String
+        if (-not $jsonInput -or $jsonInput.Trim().Length -eq 0) { exit 0 }
 
-    if (-not $jsonInput -or $jsonInput.Trim().Length -eq 0) {
-        exit 0
+        $tempFile = Join-Path $env:TEMP "claude-toast-$([System.Guid]::NewGuid().ToString('N').Substring(0,8)).json"
+        [System.IO.File]::WriteAllText($tempFile, $jsonInput)
+
+        $scriptPath = $MyInvocation.MyCommand.Path
+        Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @(
+            "-ExecutionPolicy", "Bypass", "-NoProfile", "-NoLogo", "-NonInteractive",
+            "-File", "`"$scriptPath`"", "-PayloadFile", "`"$tempFile`""
+        )
+    } catch {
+        # Never fail — silently ignore
     }
+    exit 0
+}
+
+# --- Async mode: process the notification in the background ---
+try {
+    # Read and clean up temp file
+    if (-not (Test-Path $PayloadFile)) { exit 0 }
+    $jsonInput = [System.IO.File]::ReadAllText($PayloadFile)
+    Remove-Item $PayloadFile -Force -ErrorAction SilentlyContinue
+
+    if (-not $jsonInput -or $jsonInput.Trim().Length -eq 0) { exit 0 }
 
     $hookData = $jsonInput | ConvertFrom-Json
 
@@ -45,6 +73,39 @@ try {
 
     # Check if this notification type is enabled
     if ($notifConfig.ContainsKey("enabled") -and -not $notifConfig.enabled) { exit 0 }
+
+    # --- Window focus detection: skip toast if editor is in foreground ---
+    $skipFocusCheck = $config.ContainsKey("alwaysNotify") -and $config.alwaysNotify
+    if (-not $skipFocusCheck) {
+        try {
+            Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class FocusCheck {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    public static string GetForegroundProcessName() {
+        IntPtr hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return "";
+        uint pid;
+        GetWindowThreadProcessId(hwnd, out pid);
+        try {
+            return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
+        } catch {
+            return "";
+        }
+    }
+}
+"@ -ErrorAction SilentlyContinue
+
+            $foreground = [FocusCheck]::GetForegroundProcessName().ToLower()
+            $editorProcesses = @("code", "cursor", "code - insiders", "windsurf")
+            if ($foreground -in $editorProcesses) { exit 0 }
+        } catch {
+            # If focus detection fails, proceed with notification
+        }
+    }
 
     # --- Rate Limiting (file-timestamp based, avoids JSON parse overhead) ---
     $historyPath = Join-Path $env:LOCALAPPDATA "ClaudeCodeToast\last_notify"
