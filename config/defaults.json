@@ -1,0 +1,50 @@
+{
+  "enabled": true,
+  "aumid": "ClaudeCode.Toast",
+  "deepLink": {
+    "mode": "vscode",
+    "vscodeVariant": "code"
+  },
+  "rateLimit": {
+    "maxPerHour": 10,
+    "cooldownSeconds": 5
+  },
+  "notifications": {
+    "permission_prompt": {
+      "enabled": true,
+      "scenario": "Urgent",
+      "sound": "ms-winsoundevent:Notification.Looping.Call2",
+      "silent": false,
+      "expirationMinutes": 5,
+      "showButton": true,
+      "buttonText": "Open Claude"
+    },
+    "idle_prompt": {
+      "enabled": true,
+      "scenario": "Default",
+      "sound": "ms-winsoundevent:Notification.Default",
+      "silent": false,
+      "expirationMinutes": 30,
+      "showButton": true,
+      "buttonText": "Open Claude"
+    },
+    "auth_success": {
+      "enabled": true,
+      "scenario": "Default",
+      "sound": null,
+      "silent": true,
+      "expirationMinutes": 1,
+      "showButton": false,
+      "buttonText": "Open Claude"
+    },
+    "elicitation_dialog": {
+      "enabled": true,
+      "scenario": "Reminder",
+      "sound": "ms-winsoundevent:Notification.Reminder",
+      "silent": false,
+      "expirationMinutes": 60,
+      "showButton": true,
+      "buttonText": "Open Claude"
+    }
+  }
+}

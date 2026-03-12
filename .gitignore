@@ -1,0 +1,8 @@
+# User config (created at install location, not in repo)
+config.json
+
+# Error logs
+error.log
+
+# Rate limit history
+history.json
