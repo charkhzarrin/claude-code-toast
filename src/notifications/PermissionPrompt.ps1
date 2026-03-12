@@ -29,7 +29,8 @@ if ($NotifConfig.showButton) {
     if ($Config.deepLink.mode -eq "vscode") {
         $variant = if ($Config.deepLink.vscodeVariant) { $Config.deepLink.vscodeVariant } else { "code" }
         $encodedCwd = if ($cwd) { [Uri]::EscapeDataString($cwd) } else { "" }
-        $launchUri = "${variant}://file/${encodedCwd}"
+        $scheme = switch ($variant) { "code" { "vscode" } "code-insiders" { "vscode-insiders" } default { $variant } }
+        $launchUri = "${scheme}://file/${encodedCwd}"
         $button = New-BTButton -Content $buttonText -Arguments $launchUri -ActivationType Protocol
     } else {
         $button = New-BTButton -Content $buttonText -Arguments "dismiss" -ActivationType System

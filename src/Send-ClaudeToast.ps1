@@ -20,13 +20,13 @@ param(
 # --- Hook mode: read stdin, fire async, exit fast ---
 if (-not $PayloadFile) {
     try {
-        $jsonInput = $input | Out-String
+        $jsonInput = [System.Console]::In.ReadToEnd()
         if (-not $jsonInput -or $jsonInput.Trim().Length -eq 0) { exit 0 }
 
         $tempFile = Join-Path $env:TEMP "claude-toast-$([System.Guid]::NewGuid().ToString('N').Substring(0,8)).json"
         [System.IO.File]::WriteAllText($tempFile, $jsonInput)
 
-        $scriptPath = $MyInvocation.MyCommand.Path
+        $scriptPath = $MyInvocation.MyCommand.Path -replace '/', '\'
         Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @(
             "-ExecutionPolicy", "Bypass", "-NoProfile", "-NoLogo", "-NonInteractive",
             "-File", "`"$scriptPath`"", "-PayloadFile", "`"$tempFile`""
@@ -76,7 +76,7 @@ try {
 
     # --- Smart notification: skip only if user is actively using the editor ---
     # Like Telegram: window open but idle → notify. Actively typing → skip.
-    $idleThresholdSec = if ($config.ContainsKey("idleThresholdSeconds")) { $config.idleThresholdSeconds } else { 60 }
+    $idleThresholdSec = if ($config.ContainsKey("idleThresholdSeconds")) { $config.idleThresholdSeconds } else { 5 }
     $skipFocusCheck = $config.ContainsKey("alwaysNotify") -and $config.alwaysNotify
     if (-not $skipFocusCheck) {
         try {

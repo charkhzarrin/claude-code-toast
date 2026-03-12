@@ -1,6 +1,7 @@
 {
   "enabled": true,
-  "alwaysNotify": false,
+  "alwaysNotify": true,
+  "idleThresholdSeconds": 5,
   "aumid": "ClaudeCode.Toast",
   "deepLink": {
     "mode": "vscode",
