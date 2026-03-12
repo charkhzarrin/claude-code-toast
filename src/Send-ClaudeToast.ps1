@@ -74,36 +74,49 @@ try {
     # Check if this notification type is enabled
     if ($notifConfig.ContainsKey("enabled") -and -not $notifConfig.enabled) { exit 0 }
 
-    # --- Window focus detection: skip toast if editor is in foreground ---
+    # --- Smart notification: skip only if user is actively using the editor ---
+    # Like Telegram: window open but idle → notify. Actively typing → skip.
+    $idleThresholdSec = if ($config.ContainsKey("idleThresholdSeconds")) { $config.idleThresholdSeconds } else { 60 }
     $skipFocusCheck = $config.ContainsKey("alwaysNotify") -and $config.alwaysNotify
     if (-not $skipFocusCheck) {
         try {
             Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
-using System.Text;
-public class FocusCheck {
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+public class UserActivity {
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+    [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO {
+        public uint cbSize;
+        public uint dwTime;
+    }
     public static string GetForegroundProcessName() {
         IntPtr hwnd = GetForegroundWindow();
         if (hwnd == IntPtr.Zero) return "";
         uint pid;
         GetWindowThreadProcessId(hwnd, out pid);
-        try {
-            return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
-        } catch {
-            return "";
-        }
+        try { return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; }
+        catch { return ""; }
+    }
+    public static double GetIdleSeconds() {
+        LASTINPUTINFO info = new LASTINPUTINFO();
+        info.cbSize = (uint)Marshal.SizeOf(info);
+        if (!GetLastInputInfo(ref info)) return 9999;
+        return (Environment.TickCount - info.dwTime) / 1000.0;
     }
 }
 "@ -ErrorAction SilentlyContinue
 
-            $foreground = [FocusCheck]::GetForegroundProcessName().ToLower()
+            $foreground = [UserActivity]::GetForegroundProcessName().ToLower()
             $editorProcesses = @("code", "cursor", "code - insiders", "windsurf")
-            if ($foreground -in $editorProcesses) { exit 0 }
+            if ($foreground -in $editorProcesses) {
+                $idleSeconds = [UserActivity]::GetIdleSeconds()
+                # User is actively using editor → skip
+                if ($idleSeconds -lt $idleThresholdSec) { exit 0 }
+            }
         } catch {
-            # If focus detection fails, proceed with notification
+            # If detection fails, proceed with notification
         }
     }
 
