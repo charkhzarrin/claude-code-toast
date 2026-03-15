@@ -1,190 +1,119 @@
-# Claude Code Toast
+# claude-code-toast — Windows Toast Notifications for Claude Code
 
-Rich Windows 11 toast notifications for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — never miss a permission prompt or task completion again.
+**Get notified the moment Claude finishes responding — without watching the terminal.**
 
-![Windows 11](https://img.shields.io/badge/Windows%2011-0078D6?logo=windows11&logoColor=white)
-![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-5391FE?logo=powershell&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D4?logo=windows)](https://github.com/charkhzarrin/claude-code-toast)
+[![PowerShell 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell)](https://github.com/PowerShell/PowerShell)
 
-## Features
+---
 
-| Event | Notification Style | Description |
-|-------|-------------------|-------------|
-| **Permission Prompt** | Urgent (breaks DND) | Claude needs your permission to run a command |
-| **Task Complete** | Default with chime | Claude finished working and is waiting for input |
-| **Auth Success** | Silent, auto-dismiss | Authentication completed successfully |
-| **Input Needed** | Persistent reminder | Claude is asking you a question |
+claude-code-toast is a lightweight PowerShell tool that hooks into [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and fires a native Windows toast notification every time Claude finishes a response. Switch to another window while Claude works — you'll know exactly when it's done.
 
-- Custom Claude branding (icon + app identity)
-- **"Open Claude" button** — click to jump back to VS Code
-- **Smart rate limiting** — no notification spam (configurable)
-- **Tag-based replacement** — new notifications update old ones instead of stacking
-- **Per-type configuration** — enable/disable, change sounds, adjust expiration
-- **Deep linking** — `vscode://` protocol integration
-- **Error-safe** — notifications never block Claude Code
+Works with both the **Claude Code CLI** and the **Claude Code VS Code extension**.
 
-## Quick Start
+---
 
-### Prerequisites
+## What It Does
 
-- Windows 10/11
-- PowerShell 5.1+ (pre-installed on Windows)
-- Claude Code (CLI or VS Code extension)
+- Shows a Windows toast notification after each Claude response, including the project name and a preview of the reply
+- Displays **"Claude Code"** as the app name with a custom icon
+- Provides an **"Open in VS Code"** button that jumps straight back to your project
+- Stays on screen until dismissed — no missed notifications
+- Runs silently in the background — zero impact on Claude's performance
 
-### Install
+---
+
+## Installation
+
+Run a single command in PowerShell or Windows Terminal from the project folder:
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/claude-code-toast.git
-cd claude-code-toast
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-That's it. The installer handles everything:
-1. Installs [BurntToast](https://github.com/Windos/BurntToast) module (user scope, no admin)
-2. Registers Windows App ID for branded notifications
-3. Copies scripts to `%LOCALAPPDATA%\ClaudeCodeToast\`
-4. Adds the notification hook to Claude Code's `settings.json`
-5. Sends a test notification to confirm it works
+That's it. The installer registers the hook in Claude Code's `settings.json` and sets everything up permanently — no need to run anything again.
 
-### Uninstall
+> **First time you click "Open in VS Code":** VS Code will show a one-time security dialog. Check **"Allow opening local paths without asking"** and click **Yes** — it won't ask again.
 
-```powershell
-cd claude-code-toast
-powershell -ExecutionPolicy Bypass -File uninstall.ps1
-```
+### Requirements
 
-## Configuration
+| Requirement | Version |
+|---|---|
+| Windows | 10 or 11 |
+| PowerShell | 5.1 or later |
+| Claude Code | CLI or VS Code extension |
+| BurntToast | Auto-installed during setup |
 
-Create `%LOCALAPPDATA%\ClaudeCodeToast\config.json` to override defaults. You only need to specify the settings you want to change:
-
-```json
-{
-  "rateLimit": {
-    "maxPerHour": 20,
-    "cooldownSeconds": 3
-  },
-  "notifications": {
-    "auth_success": {
-      "enabled": false
-    },
-    "permission_prompt": {
-      "silent": true
-    }
-  }
-}
-```
-
-### All Configuration Options
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `enabled` | `true` | Global on/off switch |
-| `deepLink.mode` | `"vscode"` | Button action: `"vscode"`, `"terminal"`, or `"none"` |
-| `deepLink.vscodeVariant` | `"code"` | VS Code variant: `"code"` or `"code-insiders"` |
-| `rateLimit.maxPerHour` | `10` | Maximum notifications per hour |
-| `rateLimit.cooldownSeconds` | `5` | Minimum seconds between notifications |
-
-### Per-Notification Settings
-
-Each notification type (`permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`) supports:
-
-| Setting | Description |
-|---------|-------------|
-| `enabled` | Enable/disable this notification type |
-| `scenario` | Windows toast scenario: `Default`, `Reminder`, `Urgent` |
-| `sound` | Windows sound URI (e.g., `ms-winsoundevent:Notification.Default`) |
-| `silent` | `true` to suppress sound |
-| `expirationMinutes` | How long the notification stays in Action Center |
-| `showButton` | Show the "Open Claude" action button |
-| `buttonText` | Custom button label |
-
-## Testing
-
-### Preview all notification styles
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tests\Test-Toast.ps1
-```
-
-### Simulate full Claude Code integration
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tests\Test-Integration.ps1
-```
+---
 
 ## How It Works
 
-Claude Code has a [hook system](https://docs.anthropic.com/en/docs/claude-code/hooks) that fires events during operation. This tool registers a `Notification` hook that:
+claude-code-toast registers a `Stop` hook in Claude Code's `~/.claude/settings.json`. After every response, Claude Code invokes `hook.ps1`, which:
 
-1. Receives JSON payload from Claude Code via stdin
-2. Parses the notification type and message
-3. Applies rate limiting to prevent spam
-4. Routes to the appropriate notification builder
-5. Displays a rich Windows toast notification via BurntToast
+1. Reads the JSON payload from stdin (`session_id`, `cwd`, `last_assistant_message`)
+2. Spawns a detached background process to display the toast — fire-and-forget, so it never blocks Claude
+3. Calls the Windows WinRT notification APIs directly — no heavy runtime dependencies
 
-```
-Claude Code fires Notification event
-  → stdin JSON → Send-ClaudeToast.ps1
-    → Config.ps1 (load settings)
-    → Rate limiter (check history)
-    → PermissionPrompt.ps1 / IdlePrompt.ps1 / ...
-      → BurntToast → Windows Toast Notification
-```
+The only time BurntToast is used is during installation for a test notification. Day-to-day operation uses WinRT only.
 
-## Project Structure
+### File Structure
 
 ```
 claude-code-toast/
-├── install.ps1                      # One-command installer
-├── uninstall.ps1                    # Clean removal
-├── assets/
-│   └── claude-icon.png              # App icon (64x64)
+├── install.ps1
+├── uninstall.ps1
 ├── src/
-│   ├── Send-ClaudeToast.ps1         # Main dispatcher (hook entry point)
-│   ├── Config.ps1                   # Configuration loader
-│   ├── Register-AppId.ps1           # Windows AUMID registration
-│   └── notifications/
-│       ├── PermissionPrompt.ps1     # Urgent — permission needed
-│       ├── IdlePrompt.ps1           # Default — task complete
-│       ├── AuthSuccess.ps1          # Silent — auth OK
-│       └── ElicitationDialog.ps1    # Reminder — input needed
+│   ├── hook.ps1              # Main hook script (runs after each response)
+│   └── Register-AppId.ps1   # Registers the app AUMID for the custom icon
 ├── config/
-│   └── defaults.json                # Default configuration
-└── tests/
-    ├── Test-Toast.ps1               # Visual test
-    └── Test-Integration.ps1         # Full integration test
+│   └── defaults.json
+└── assets/
+    └── claude-icon.png
 ```
 
-## Troubleshooting
+---
 
-### Notifications don't appear
+## Configuration
 
-1. Check BurntToast is installed: `Get-Module -ListAvailable BurntToast`
-2. Check Windows notification settings: Settings → System → Notifications
-3. Check error log: `%LOCALAPPDATA%\ClaudeCodeToast\error.log`
-4. Run the test: `powershell -ExecutionPolicy Bypass -File tests\Test-Toast.ps1`
+All settings are optional. To customize, create:
 
-### "Open Claude" button doesn't work
+```
+%LOCALAPPDATA%\ClaudeCodeToast\config.json
+```
 
-- Ensure VS Code is installed and `vscode://` protocol is registered
-- Try setting `deepLink.mode` to `"none"` in your config
-
-### Too many / too few notifications
-
-Adjust rate limiting in your config:
 ```json
 {
-  "rateLimit": {
-    "maxPerHour": 20,
-    "cooldownSeconds": 2
-  }
+  "cooldownSeconds": 10,
+  "maxPerHour": 30,
+  "sound": "Default",
+  "silent": false,
+  "vscodeVariant": "code"
 }
 ```
 
-### Hook not firing
+| Setting | Default | Description |
+|---|---|---|
+| `cooldownSeconds` | `10` | Minimum seconds between notifications |
+| `maxPerHour` | `30` | Maximum notifications per hour |
+| `sound` | `"Default"` | Windows notification sound: `Default`, `Mail`, `Reminder`, `SMS`, etc. |
+| `silent` | `false` | Set to `true` to suppress all sounds |
+| `vscodeVariant` | `"code"` | VS Code variant for the Open button: `code`, `code-insiders`, or `cursor` |
 
-Check `~/.claude/settings.json` contains the Notification hook entry. Re-run `install.ps1` if needed.
+Changes take effect immediately — no restart required.
+
+---
+
+## Uninstall
+
+```powershell
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+Removes the hook from Claude Code's `settings.json` and cleans up all registered components. Your Claude Code settings and conversations are untouched.
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE) for details.

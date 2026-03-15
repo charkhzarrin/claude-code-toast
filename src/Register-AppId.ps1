@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Registers the AppUserModelID (AUMID) for Claude Code Toast notifications.
 .DESCRIPTION
