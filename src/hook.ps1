@@ -152,6 +152,7 @@ try {
     <binding template="ToastGeneric">
       <text>$safeProject</text>
       <text>$safePreview</text>
+      <text placement="attribution">$(Get-Date -Format 'HH:mm')</text>
       <image placement="appLogoOverride" src="$safeIcon" hint-crop="circle"/>
     </binding>
   </visual>
