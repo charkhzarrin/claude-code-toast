@@ -12,6 +12,8 @@ param([string]$PayloadFile)
 # --- Hook mode: read stdin, fire-and-forget, exit fast (~10ms) ---
 if (-not $PayloadFile) {
     try {
+        [Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $json = [System.Console]::In.ReadToEnd()
         if ($json -and $json.Trim()) {
             $tmp = Join-Path $env:TEMP "claude-toast-$([System.Guid]::NewGuid().ToString('N').Substring(0,8)).json"
@@ -59,31 +61,7 @@ try {
     }
     if (-not $config.enabled) { exit 0 }
 
-    # --- Idle check: skip only if editor is focused AND user was recently active ---
-    Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public class WinIdle {
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-    [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO p);
-    [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
-    public static string FgProcess() {
-        IntPtr h = GetForegroundWindow(); if (h == IntPtr.Zero) return "";
-        uint pid; GetWindowThreadProcessId(h, out pid);
-        try { return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName.ToLower(); } catch { return ""; }
-    }
-    public static double IdleSecs() {
-        LASTINPUTINFO i = new LASTINPUTINFO(); i.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(i);
-        return GetLastInputInfo(ref i) ? (Environment.TickCount - i.dwTime) / 1000.0 : 9999;
-    }
-}
-"@ -ErrorAction SilentlyContinue
-
-    try {
-        $editors = @("code", "cursor", "code - insiders", "windsurf")
-        $fg = [WinIdle]::FgProcess()
-        if ($fg -in $editors -and [WinIdle]::IdleSecs() -lt [double]$config.idleThresholdSeconds) { exit 0 }
-    } catch {}
+    # Idle check removed — always notify
 
     # --- Rate limit ---
     $ratePath = Join-Path $env:LOCALAPPDATA "ClaudeCodeToast\last_notify"
@@ -101,29 +79,64 @@ public class WinIdle {
 
     # --- Toast content ---
     $project = if ($cwd) { Split-Path $cwd -Leaf } else { "Claude" }
-    $preview = ($msg -replace '(?m)^#{1,6}\s+', '' -replace '\*{1,2}([^*]+)\*{1,2}', '$1' -replace '`[^`]+`', '' -replace '\n+', ' ' -replace '\s+', ' ').Trim()
+
+    # Strip markdown and normalize to ASCII-safe preview
+    $preview = $msg -replace '(?m)^#{1,6}\s+', '' `
+                    -replace '\*{1,2}([^*]+)\*{1,2}', '$1' `
+                    -replace '`[^`]+`', '' `
+                    -replace '\n+', ' ' `
+                    -replace '\s+', ' '
+    $preview = $preview.Trim()
     if ($preview.Length -gt 120) { $preview = $preview.Substring(0, 117) + "..." }
     if (-not $preview) { $preview = "Done." }
 
-    # --- BurntToast ---
-    Import-Module BurntToast -ErrorAction Stop
+    # --- Toast via WinRT (no BurntToast — full AppId control) ---
+    $null = [Windows.UI.Notifications.ToastNotificationManager,   Windows.UI.Notifications,   ContentType = WindowsRuntime]
+    $null = [Windows.UI.Notifications.ToastNotification,          Windows.UI.Notifications,   ContentType = WindowsRuntime]
+    $null = [Windows.Data.Xml.Dom.XmlDocument,                    Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
 
     $iconPath = Join-Path $env:LOCALAPPDATA "ClaudeCodeToast\claude-icon.png"
     $scheme   = if ($config.vscodeVariant -eq "code-insiders") { "vscode-insiders" } else { "vscode" }
     $uri      = "${scheme}://file/$($cwd -replace '\\', '/')"
-    $button   = New-BTButton -Content "Open in VS Code" -Arguments $uri -ActivationType Protocol
 
-    $params = @{
-        Text             = "Claude: $project", $preview
-        AppLogo          = $iconPath
-        UniqueIdentifier = "claude-stop-$sessId"
-        Button           = $button
-        ExpirationTime   = [DateTime]::Now.AddMinutes(10)
-    }
-    if ($config.silent)      { $params["Silent"] = $true }
-    elseif ($config.sound)   { $params["Sound"]  = $config.sound }
+    # Escape XML special characters
+    $safeProject = [System.Security.SecurityElement]::Escape("Claude: $project")
+    $safePreview = [System.Security.SecurityElement]::Escape($preview)
+    $safeIcon    = [System.Security.SecurityElement]::Escape($iconPath)
+    $safeUri     = [System.Security.SecurityElement]::Escape($uri)
 
-    New-BurntToastNotification @params
+    $soundXml = if ($config.silent) {
+        '<audio silent="true"/>'
+    } elseif ($config.sound) {
+        "<audio src='ms-winsoundevent:Notification.$($config.sound)'/>"
+    } else { "" }
+
+    $xml = @"
+<toast scenario="reminder">
+  <visual>
+    <binding template="ToastGeneric">
+      <text>$safeProject</text>
+      <text>$safePreview</text>
+      <image placement="appLogoOverride" src="$safeIcon" hint-crop="circle"/>
+    </binding>
+  </visual>
+  <actions>
+    <action content="Open in VS Code" arguments="$safeUri" activationType="protocol"/>
+    <action content="Dismiss" arguments="dismiss" activationType="system"/>
+  </actions>
+  $soundXml
+</toast>
+"@
+
+    $toastXml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+    $toastXml.LoadXml($xml)
+
+    $toast = [Windows.UI.Notifications.ToastNotification]::new($toastXml)
+    $toast.Tag   = "claude-stop-$sessId"
+    $toast.Group = "claude-stop-$sessId"
+    $toast.ExpirationTime = [DateTimeOffset]::Now.AddMinutes(10)
+
+    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("ClaudeCode.Toast").Show($toast)
 
 } catch {
     try {
