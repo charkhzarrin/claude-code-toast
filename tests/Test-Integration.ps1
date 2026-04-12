@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Integration test: simulates Claude Code hook by piping JSON to the dispatcher.
 .DESCRIPTION

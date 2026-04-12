@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Manual test: fires one notification of each type to preview all styles.
 .DESCRIPTION
