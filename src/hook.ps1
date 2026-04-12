@@ -106,9 +106,27 @@ try {
         $now.ToString("o") | Set-Content $ratePath -Force
     }
 
+    # --- Find the workspace root (git root) so the button focuses the existing window ---
+    # Walking up from cwd to find the nearest .git directory. If the user has
+    # "Iran" open in VS Code but cwd is "Iran/frontend", using cwd would open
+    # a new window. Using the git root ensures the existing window is focused.
+    $workspaceRoot = $cwd
+    if ($cwd) {
+        $checkDir = $cwd
+        while ($checkDir) {
+            if (Test-Path (Join-Path $checkDir ".git")) {
+                $workspaceRoot = $checkDir
+                break
+            }
+            $parent = Split-Path $checkDir -Parent
+            if ($parent -eq $checkDir) { break }
+            $checkDir = $parent
+        }
+    }
+
     # --- Build toast content ---
-    # Title: the project folder name (last segment of cwd)
-    $project = if ($cwd) { Split-Path $cwd -Leaf } else { "Claude" }
+    # Title: the project folder name (last segment of workspace root)
+    $project = if ($workspaceRoot) { Split-Path $workspaceRoot -Leaf } else { "Claude" }
 
     # Body: strip common markdown syntax, collapse whitespace, truncate
     $preview = $msg -replace '(?m)^#{1,6}\s+', '' `
@@ -129,7 +147,7 @@ try {
 
     # --- Build deep-link URI for the "Open in VS Code" button ---
     $scheme = if ($config.vscodeVariant -eq "code-insiders") { "vscode-insiders" } else { "vscode" }
-    $uri    = "${scheme}://file/$($cwd -replace '\\', '/')"
+    $uri    = "${scheme}://file/$($workspaceRoot -replace '\\', '/')"
 
     # --- Escape all user-supplied values before embedding in XML ---
     $safeProject = [System.Security.SecurityElement]::Escape($project)
