@@ -146,11 +146,7 @@ try {
     $null = [Windows.Data.Xml.Dom.XmlDocument,                  Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
 
     # --- Build deep-link URI for the "Open in VS Code" button ---
-    $scheme = switch ($config.vscodeVariant) {
-        "code-insiders" { "vscode-insiders" }
-        "cursor"        { "cursor" }
-        default         { "vscode" }
-    }
+    $scheme = if ($config.vscodeVariant -eq "code-insiders") { "vscode-insiders" } else { "vscode" }
     $uri    = "${scheme}://file/$($workspaceRoot -replace '\\', '/')"
 
     # --- Escape all user-supplied values before embedding in XML ---
@@ -179,7 +175,7 @@ try {
     </binding>
   </visual>
   <actions>
-    <action content="Open in $(if ($config.vscodeVariant -eq 'cursor') {'Cursor'} else {'VS Code'})" arguments="$safeUri" activationType="protocol"/>
+    <action content="Open in VS Code" arguments="$safeUri" activationType="protocol"/>
     <action content="Dismiss"         arguments="dismiss"  activationType="system"/>
   </actions>
   $soundXml
