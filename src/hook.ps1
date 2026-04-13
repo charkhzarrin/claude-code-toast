@@ -169,7 +169,7 @@ try {
     # scenario="reminder" keeps the toast on screen until the user explicitly
     # clicks a button or the X — it does not auto-dismiss after a few seconds.
     $xml = @"
-<toast scenario="reminder">
+<toast launch="$safeUri" activationType="protocol" scenario="reminder">
   <visual>
     <binding template="ToastGeneric">
       <text>$safeProject</text>

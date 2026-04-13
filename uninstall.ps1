@@ -62,7 +62,7 @@ if (Test-Path $settingsPath) {
     Write-Host "  settings.json not found - skipping" -ForegroundColor Yellow
 }
 
-# --- Step 2: Remove AUMID registry entry ---
+# --- Step 2: Remove AUMID registry entry and Start menu shortcut ---
 Write-Host "[2/4] Removing Windows App ID..." -ForegroundColor Yellow
 $regPath = "HKCU:\Software\Classes\AppUserModelId\ClaudeCode.Toast"
 if (Test-Path $regPath) {
@@ -70,6 +70,14 @@ if (Test-Path $regPath) {
     Write-Host "  Registry entry removed - OK" -ForegroundColor Green
 } else {
     Write-Host "  Registry entry not found - skipping" -ForegroundColor Yellow
+}
+
+$shortcutPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Claude Code.lnk"
+if (Test-Path $shortcutPath) {
+    Remove-Item -Path $shortcutPath -Force
+    Write-Host "  Start menu shortcut removed - OK" -ForegroundColor Green
+} else {
+    Write-Host "  Shortcut not found - skipping" -ForegroundColor Yellow
 }
 
 # --- Step 3: Remove installed files ---
