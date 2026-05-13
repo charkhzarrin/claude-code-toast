@@ -30,6 +30,15 @@ New-ItemProperty -Path $regPath -Name "DisplayName" -Value $DisplayName -Propert
 New-ItemProperty -Path $regPath -Name "IconUri" -Value $IconPath -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $regPath -Name "IconBackgroundColor" -Value "FFDA7738" -PropertyType String -Force | Out-Null
 
+# Force-enable banner display. Without these, Windows may deliver toasts to
+# Action Center silently without showing the on-screen banner — especially
+# after many notifications accumulate without user interaction.
+$notifSettings = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\$Aumid"
+if (-not (Test-Path $notifSettings)) { New-Item -Path $notifSettings -Force | Out-Null }
+New-ItemProperty -Path $notifSettings -Name "Enabled"            -Value 1 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $notifSettings -Name "ShowBanner"         -Value 1 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $notifSettings -Name "ShowInActionCenter" -Value 1 -PropertyType DWord -Force | Out-Null
+
 Write-Host "Registered AUMID: $Aumid" -ForegroundColor Green
 Write-Host "  DisplayName: $DisplayName"
 Write-Host "  IconUri: $IconPath"
